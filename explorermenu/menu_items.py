@@ -21,6 +21,7 @@ class _MenuItem:
                  subkey_path: str = None
                  ) -> None:
         def label_to_subkey(label_: str) -> str:
+            label_ = re.sub(r'v\d+\.\d+\.\d+', '', label_).strip()
             return re.sub(r'\W+', '_', label_).lower()
         self.children = children if children else []
         self.label = label
