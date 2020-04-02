@@ -13,6 +13,15 @@ class _LabelValuePair:
         self.value = value
 
 
+def prefix_by_index(index: int):
+    index = index - 1
+    a = ord('a')
+    char_count = ord('z') - a + 1
+    first = chr(int(index / char_count) + a)
+    second = chr(int(index % char_count) + a)
+    return f'{first}{second}'
+
+
 class _MenuItem:
     def __init__(self,
                  label: str,
@@ -23,16 +32,37 @@ class _MenuItem:
         def label_to_subkey(label_: str) -> str:
             label_ = re.sub(r'v\d+\.\d+\.\d+', '', label_).strip()
             return re.sub(r'\W+', '_', label_).lower()
-        self.children = children if children else []
+        self.children = []
         self.label = label
         self.subkey_path = subkey_path if subkey_path else f'shell\\{label_to_subkey(label)}'
         self.label_values = label_values
+        self.parent = None
+
+        if children:
+            for child in children:
+                self.add_child(child)
+
+    def set_parent(self, parent: '_MenuItem'):
+        self.parent = parent
 
     def add_child(self, child: '_MenuItem') -> None:
         if isinstance(child, _MenuItem):
             self.children.append(child)
+            child.set_parent(self)
 
-    def register(self) -> None:
+    def get_full_subkey_path(self):
+        subkey_list = [self.subkey_path]
+        parent: _MenuItem = self.parent
+        while parent:
+            subkey_list.append(parent.subkey_path)
+            parent = parent.parent
+        return '\\'.join(filter(None, reversed(subkey_list)))
+
+    def register(self, index: int = 0) -> None:
+        if index > 0:
+            prefix = prefix_by_index(index)
+            self.subkey_path = self.subkey_path.replace('shell\\', f'shell\\{prefix}_')
+
         def register_at(root_shell: str, label_values: List[_LabelValuePair], subkey_path: str):
             subkey = '\\'.join([root_shell, subkey_path])
             item = winreg.CreateKey(winreg.HKEY_CURRENT_USER, subkey)
@@ -40,13 +70,13 @@ class _MenuItem:
                 winreg.SetValueEx(item, i.label, 0, winreg.REG_SZ, i.value)
             winreg.FlushKey(item)
 
-        register_at(_BACKGROUND_PATH, self.label_values, self.subkey_path)
-        register_at(_LIBRARY_PATH, self.label_values, self.subkey_path)
+        full_subkey_path = self.get_full_subkey_path()
 
-        for child in self.children:
-            new_subkey_path = '\\'.join(filter(None, [self.subkey_path, child.subkey_path]))
-            child.subkey_path = new_subkey_path
-            child.register()
+        register_at(_BACKGROUND_PATH, self.label_values, full_subkey_path)
+        register_at(_LIBRARY_PATH, self.label_values, full_subkey_path)
+
+        for i, child in enumerate(self.children):
+            child.register(i + 1)
 
     def remove(self) -> None:
         def remove_from(root: int, subkey: str):
@@ -83,9 +113,9 @@ class MenuActionItem(_MenuItem):
         self.command = command
         command_pair = _LabelValuePair('', self.command)
         command_menu_item = _MenuItem('', [], [command_pair], '\\command')
-        children = [command_menu_item]
         label_values = [_LabelValuePair('', label)]
-        super().__init__(label, children, label_values)
+        super().__init__(label, [], label_values)
+        super().add_child(command_menu_item)
 
     def add_child(self, child) -> None:
         warnings.warn("MenuActionItem wont add children")
@@ -104,4 +134,3 @@ def node(label: str, *children_or_command: Union[str, _MenuItem]) -> Union[MenuA
         children = []
 
     return MenuContainerItem(label, children)
-
