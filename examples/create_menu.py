@@ -1,4 +1,4 @@
-from items import single_action_item, nested_set
+from examples.items import single_action_item, nested_set
 
 
 # creates entries in explorer menu
