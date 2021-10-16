@@ -4,6 +4,9 @@ Explorer Menu
 
 How to use
 ========================================================
+### Installing
+`pip install explorer-menu`
+
 ### Defining items
 
 Items can either be:
